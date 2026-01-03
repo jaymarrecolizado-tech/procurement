@@ -13,16 +13,23 @@ class UserController extends Controller
 {
     public function __construct()
     {
-        $this->middleware(function ($request, $next) {
-            if (!Auth::user()->hasRole('ADMIN')) {
-                abort(403, 'Unauthorized action.');
-            }
-            return $next($request);
-        });
+        // Check admin access in each method instead of using middleware
+    }
+
+    /**
+     * Check if user is admin, abort if not
+     */
+    private function checkAdmin()
+    {
+        if (!Auth::check() || !Auth::user()->hasRole('ADMIN')) {
+            abort(403, 'Unauthorized action. Admin access required.');
+        }
     }
 
     public function index(Request $request)
     {
+        $this->checkAdmin();
+        
         $query = User::query();
 
         // Search functionality
@@ -46,11 +53,15 @@ class UserController extends Controller
 
     public function create()
     {
+        $this->checkAdmin();
+        
         return view('users.create');
     }
 
     public function store(Request $request)
     {
+        $this->checkAdmin();
+        
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
@@ -87,6 +98,8 @@ class UserController extends Controller
 
     public function show(User $user)
     {
+        $this->checkAdmin();
+        
         // Load user activity logs - activities performed by user OR activities on this user
         $activityLogs = \App\Models\ActivityLog::where(function($query) use ($user) {
                 $query->where('user_id', $user->id)
@@ -105,6 +118,8 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
+        $this->checkAdmin();
+        
         // Prevent editing yourself (use profile page instead)
         if ($user->id === Auth::id()) {
             return redirect()->route('profile.edit')
@@ -116,6 +131,8 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
+        $this->checkAdmin();
+        
         // Prevent editing yourself (use profile page instead)
         if ($user->id === Auth::id()) {
             return redirect()->route('profile.edit')
@@ -159,6 +176,8 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
+        $this->checkAdmin();
+        
         // Prevent deleting yourself
         if ($user->id === Auth::id()) {
             return back()->withErrors(['error' => 'You cannot delete your own account.']);
@@ -188,6 +207,8 @@ class UserController extends Controller
 
     public function resetPassword(Request $request, User $user)
     {
+        $this->checkAdmin();
+        
         $validated = $request->validate([
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
