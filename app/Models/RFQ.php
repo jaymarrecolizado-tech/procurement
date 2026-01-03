@@ -54,6 +54,22 @@ class RFQ extends Model
     }
 
     /**
+     * Get all approval routings for this RFQ
+     */
+    public function approvalRoutings(): HasMany
+    {
+        return $this->hasMany(ApprovalRouting::class);
+    }
+
+    /**
+     * Get all documents for this RFQ
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    /**
      * Get status display name
      */
     public function getStatusNameAttribute()

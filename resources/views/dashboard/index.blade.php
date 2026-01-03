@@ -18,8 +18,10 @@
             <!-- Welcome Message -->
             <div class="bg-gradient-to-r from-indigo-500 to-purple-600 overflow-hidden shadow-lg sm:rounded-lg mb-6">
                 <div class="p-6 text-white">
-                    <h3 class="text-xl font-semibold mb-2">Welcome back, {{ Auth::user()->name }}!</h3>
-                    <p class="text-indigo-100">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-xl font-semibold mb-2">Welcome back, {{ Auth::user()->name }}!</h3>
+                            <p class="text-indigo-100">
                         <span class="inline-flex items-center">
                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
@@ -35,6 +37,26 @@
                             </span>
                         @endif
                     </p>
+                        </div>
+                        @if(Auth::user()->hasAnyRole(['BAC_MEMBER', 'BAC_CHAIR', 'PROCUREMENT_OFFICER', 'ADMIN']))
+                            @php
+                                $pendingCount = \App\Models\ApprovalRouting::where('approver_id', Auth::id())
+                                    ->where('status', 'PENDING')
+                                    ->count();
+                            @endphp
+                            <a href="{{ route('approvals.dashboard') }}" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg transition">
+                                <div class="flex items-center space-x-2">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    <span class="font-medium">Approval Dashboard</span>
+                                    @if($pendingCount > 0)
+                                        <span class="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">{{ $pendingCount }}</span>
+                                    @endif
+                                </div>
+                            </a>
+                        @endif
+                    </div>
                 </div>
             </div>
 
@@ -71,6 +93,13 @@
                                             <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center shadow-sm">
                                                 <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                </svg>
+                                            </div>
+                                            @break
+                                        @case('pending_approval')
+                                            <div class="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center shadow-sm">
+                                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                 </svg>
                                             </div>
                                             @break
@@ -111,6 +140,9 @@
                                                 @break
                                             @case('rejected')
                                                 Rejected
+                                                @break
+                                            @case('pending_approval')
+                                                Pending Approval
                                                 @break
                                             @default
                                                 {{ ucfirst(str_replace('_', ' ', $key)) }}

@@ -12,6 +12,9 @@ class ApprovalRouting extends Model
 
     protected $fillable = [
         'bac_document_id',
+        'purchase_request_id',
+        'rfq_id',
+        'document_type',
         'approver_id',
         'approver_role',
         'sequence',
@@ -32,6 +35,22 @@ class ApprovalRouting extends Model
     public function bacDocument(): BelongsTo
     {
         return $this->belongsTo(BacDocument::class);
+    }
+
+    /**
+     * Get the Purchase Request for this approval routing
+     */
+    public function purchaseRequest(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseRequest::class);
+    }
+
+    /**
+     * Get the RFQ for this approval routing
+     */
+    public function rfq(): BelongsTo
+    {
+        return $this->belongsTo(RFQ::class);
     }
 
     /**

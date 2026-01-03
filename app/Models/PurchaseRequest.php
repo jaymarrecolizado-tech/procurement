@@ -99,6 +99,14 @@ class PurchaseRequest extends Model
     }
 
     /**
+     * Get all approval routings for this PR
+     */
+    public function approvalRoutings(): HasMany
+    {
+        return $this->hasMany(ApprovalRouting::class);
+    }
+
+    /**
      * Get PR status display name
      */
     public function getStatusNameAttribute()

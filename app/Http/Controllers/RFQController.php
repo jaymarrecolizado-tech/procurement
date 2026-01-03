@@ -5,6 +5,11 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\PurchaseRequest;
 use App\Models\RFQ;
+use App\Models\ApprovalRouting;
+use App\Models\User;
+use App\Notifications\ApprovalRequired;
+use App\Notifications\ItemApproved;
+use App\Notifications\ItemRejected;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -126,7 +131,7 @@ class RFQController extends Controller
 
     public function show(RFQ $rfq)
     {
-        $rfq->load(['purchaseRequest.endUser', 'purchaseRequest.prItems', 'procurementOfficer', 'canvasses.canvasser']);
+        $rfq->loadMissing(['purchaseRequest.endUser', 'purchaseRequest.prItems', 'procurementOfficer', 'canvasses.canvasser', 'approvalRoutings.approver', 'documents.uploader']);
         
         return view('rfqs.show', compact('rfq'));
     }

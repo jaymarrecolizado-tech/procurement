@@ -59,6 +59,14 @@ class PurchaseOrder extends Model
     }
 
     /**
+     * Get all documents for this PO
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class, 'po_id');
+    }
+
+    /**
      * Get status display name
      */
     public function getStatusNameAttribute()

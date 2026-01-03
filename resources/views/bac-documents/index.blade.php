@@ -35,7 +35,12 @@
                                                 </span>
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                                <a href="{{ route('purchase-requests.show', $pr) }}" class="text-indigo-600 hover:text-indigo-900">View</a>
+                                                <a href="{{ route('purchase-requests.show', $pr) }}" class="text-indigo-600 hover:text-indigo-900 mr-3">View PR</a>
+                                                @if($pr->status === 'CANVASS_COMPLETE' || $pr->status === 'BAC_DOCS_READY')
+                                                    @if(Auth::user()->hasAnyRole(['BAC_SECRETARIAT', 'PROCUREMENT_OFFICER', 'ADMIN']))
+                                                        <a href="{{ route('bac-documents.create', $pr) }}" class="text-green-600 hover:text-green-900">Create BAC Doc</a>
+                                                    @endif
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach

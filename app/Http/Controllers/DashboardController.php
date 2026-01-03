@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\PurchaseRequest;
+use App\Models\ApprovalRouting;
 
 class DashboardController extends Controller
 {
@@ -80,11 +81,16 @@ class DashboardController extends Controller
             case 'BAC_SECRETARIAT':
             case 'BAC_CHAIR':
             case 'BAC_MEMBER':
+                $pendingApprovals = ApprovalRouting::where('approver_id', $user->id)
+                    ->where('status', 'PENDING')
+                    ->count();
                 return [
                     'total_prs' => PurchaseRequest::where('status', 'BAC_DOCS_READY')->count(),
-                    'pending_approval' => PurchaseRequest::where('status', 'BAC_DOCS_READY')->count(),
+                    'pending_approval' => $pendingApprovals,
                     'approved' => PurchaseRequest::where('status', 'BAC_APPROVED')->count(),
-                    'rejected' => PurchaseRequest::where('status', 'BAC_DOCS_READY')->count(),
+                    'rejected' => ApprovalRouting::where('approver_id', $user->id)
+                        ->where('status', 'REJECTED')
+                        ->count(),
                 ];
                 
             default:

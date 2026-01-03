@@ -5,6 +5,11 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\PurchaseRequest;
 use App\Models\PrItem;
+use App\Models\ApprovalRouting;
+use App\Models\User;
+use App\Notifications\ApprovalRequired;
+use App\Notifications\ItemApproved;
+use App\Notifications\ItemRejected;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Services\DocumentGeneratorService;
@@ -145,7 +150,7 @@ class PurchaseRequestController extends Controller
         }
         
         // Load relationships - use loadMissing to avoid errors if RFQ doesn't exist
-        $purchaseRequest->loadMissing(['endUser', 'prItems', 'rfq']);
+        $purchaseRequest->loadMissing(['endUser', 'prItems', 'rfq', 'approvalRoutings.approver', 'documents.uploader']);
         return view('purchase-requests.show', compact('purchaseRequest'));
     }
 
@@ -326,6 +331,262 @@ class PurchaseRequestController extends Controller
 
         $documentGenerator = new DocumentGeneratorService();
         return $documentGenerator->streamPurchaseRequestPDF($purchaseRequest);
+    }
+
+    /**
+     * Show form to assign approvers to Purchase Request
+     */
+    public function assignApprovers(PurchaseRequest $purchaseRequest)
+    {
+        if (!Auth::user()->hasAnyRole(['PROCUREMENT_OFFICER', 'ADMIN'])) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if ($purchaseRequest->status === 'RFQ_READY' || in_array($purchaseRequest->status, ['BAC_APPROVED', 'PO_APPROVED', 'PO_COMPLETE', 'COA_STAMPED'])) {
+            return redirect()->route('purchase-requests.show', $purchaseRequest)
+                ->with('error', 'Cannot assign approvers to a PR that has already progressed beyond approval stage.');
+        }
+
+        // Get users with appropriate roles for PR approval
+        $approvers = User::whereIn('role', ['PROCUREMENT_OFFICER', 'BAC_SECRETARIAT', 'BAC_CHAIR', 'ADMIN'])->get();
+        $existingRoutings = $purchaseRequest->approvalRoutings()->with('approver')->orderBy('sequence')->get();
+
+        return view('purchase-requests.assign-approvers', compact('purchaseRequest', 'approvers', 'existingRoutings'));
+    }
+
+    /**
+     * Store approval routing assignments
+     */
+    public function storeApprovers(Request $request, PurchaseRequest $purchaseRequest)
+    {
+        if (!Auth::user()->hasAnyRole(['PROCUREMENT_OFFICER', 'ADMIN'])) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $validated = $request->validate([
+            'approvers' => 'required|array|min:1',
+            'approvers.*.approver_id' => 'required|exists:users,id',
+            'approvers.*.sequence' => 'required|integer|min:1',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            // Delete existing routings
+            $purchaseRequest->approvalRoutings()->delete();
+
+            // Create new routings
+            foreach ($validated['approvers'] as $approverData) {
+                $approver = User::find($approverData['approver_id']);
+                
+                $routing = ApprovalRouting::create([
+                    'purchase_request_id' => $purchaseRequest->id,
+                    'document_type' => 'PR',
+                    'approver_id' => $approverData['approver_id'],
+                    'approver_role' => $approver->role,
+                    'sequence' => $approverData['sequence'],
+                    'status' => 'PENDING',
+                ]);
+
+                // Send notification to first approver (sequence 1)
+                if ($approverData['sequence'] == 1) {
+                    $approver->notify(new ApprovalRequired(
+                        'PR',
+                        $purchaseRequest->id,
+                        $purchaseRequest->pr_number,
+                        $purchaseRequest->project_title,
+                        $approverData['sequence'],
+                        route('purchase-requests.show', $purchaseRequest)
+                    ));
+                }
+            }
+
+            // Update PR status to PENDING_APPROVAL if not already
+            if ($purchaseRequest->status === 'PR_UNDER_REVIEW') {
+                // Keep as PR_UNDER_REVIEW but mark as routing started
+            }
+
+            activity_log('ROUTED', 'PURCHASE_REQUEST', $purchaseRequest->id, [
+                'pr_number' => $purchaseRequest->pr_number,
+                'approvers_count' => count($validated['approvers']),
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('purchase-requests.show', $purchaseRequest)
+                ->with('success', 'Approvers assigned successfully. PR is now pending approval.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withInput()->withErrors(['error' => 'Failed to assign approvers: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Approve Purchase Request
+     */
+    public function approve(Request $request, PurchaseRequest $purchaseRequest)
+    {
+        $user = Auth::user();
+        
+        // Check if user is an approver for this PR
+        $routing = $purchaseRequest->approvalRoutings()
+            ->where('approver_id', $user->id)
+            ->where('status', 'PENDING')
+            ->orderBy('sequence')
+            ->first();
+
+        if (!$routing) {
+            return back()->withErrors(['error' => 'You are not authorized to approve this PR or it is not pending your approval.']);
+        }
+
+        // Check if previous approvals are complete (sequential approval)
+        $previousRoutings = $purchaseRequest->approvalRoutings()
+            ->where('sequence', '<', $routing->sequence)
+            ->where('status', '!=', 'APPROVED')
+            ->exists();
+
+        if ($previousRoutings) {
+            return back()->withErrors(['error' => 'Previous approvers must approve before you can approve.']);
+        }
+
+        $validated = $request->validate([
+            'comments' => 'nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $startTime = $routing->created_at;
+            $timeSpent = now()->diffInHours($startTime);
+
+            $routing->update([
+                'status' => 'APPROVED',
+                'signed_at' => now(),
+                'comments' => $validated['comments'] ?? null,
+                'time_spent_hours' => $timeSpent,
+            ]);
+
+            // Check if all approvals are complete
+            $allApproved = $purchaseRequest->approvalRoutings()
+                ->where('status', '!=', 'APPROVED')
+                ->doesntExist();
+
+            if ($allApproved) {
+                // Update PR status to RFQ_READY
+                $purchaseRequest->update(['status' => 'RFQ_READY']);
+
+                // Notify PR creator
+                if ($purchaseRequest->endUser) {
+                    $purchaseRequest->endUser->notify(new ItemApproved(
+                        'PR',
+                        $purchaseRequest->id,
+                        $purchaseRequest->pr_number,
+                        $purchaseRequest->project_title,
+                        $user->name,
+                        route('purchase-requests.show', $purchaseRequest)
+                    ));
+                }
+
+                activity_log('APPROVED', 'PURCHASE_REQUEST', $purchaseRequest->id, [
+                    'pr_number' => $purchaseRequest->pr_number,
+                    'approved_by' => $user->id,
+                    'all_approvals_complete' => true,
+                ]);
+            } else {
+                // Get next approver and notify them
+                $nextRouting = $purchaseRequest->approvalRoutings()
+                    ->where('sequence', '>', $routing->sequence)
+                    ->where('status', 'PENDING')
+                    ->orderBy('sequence')
+                    ->first();
+
+                if ($nextRouting && $nextRouting->approver) {
+                    $nextRouting->approver->notify(new ApprovalRequired(
+                        'PR',
+                        $purchaseRequest->id,
+                        $purchaseRequest->pr_number,
+                        $purchaseRequest->project_title,
+                        $nextRouting->sequence,
+                        route('purchase-requests.show', $purchaseRequest)
+                    ));
+                }
+
+                activity_log('APPROVED', 'PURCHASE_REQUEST', $purchaseRequest->id, [
+                    'pr_number' => $purchaseRequest->pr_number,
+                    'approved_by' => $user->id,
+                    'all_approvals_complete' => false,
+                ]);
+            }
+
+            DB::commit();
+
+            return back()->with('success', 'PR approved successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => 'Failed to approve PR: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Reject Purchase Request
+     */
+    public function reject(Request $request, PurchaseRequest $purchaseRequest)
+    {
+        $user = Auth::user();
+        
+        // Check if user is an approver for this PR
+        $routing = $purchaseRequest->approvalRoutings()
+            ->where('approver_id', $user->id)
+            ->where('status', 'PENDING')
+            ->first();
+
+        if (!$routing) {
+            return back()->withErrors(['error' => 'You are not authorized to reject this PR or it is not pending your approval.']);
+        }
+
+        $validated = $request->validate([
+            'comments' => 'required|string|min:10',
+        ], [
+            'comments.required' => 'Please provide a reason for rejection.',
+            'comments.min' => 'Rejection reason must be at least 10 characters.',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $routing->update([
+                'status' => 'REJECTED',
+                'signed_at' => now(),
+                'comments' => $validated['comments'],
+            ]);
+
+            // Update PR status back to PR_UNDER_REVIEW for revision
+            $purchaseRequest->update(['status' => 'PR_UNDER_REVIEW']);
+
+            // Notify PR creator
+            if ($purchaseRequest->endUser) {
+                $purchaseRequest->endUser->notify(new ItemRejected(
+                    'PR',
+                    $purchaseRequest->id,
+                    $purchaseRequest->pr_number,
+                    $purchaseRequest->project_title,
+                    $user->name,
+                    $validated['comments'],
+                    route('purchase-requests.show', $purchaseRequest)
+                ));
+            }
+
+            activity_log('REJECTED', 'PURCHASE_REQUEST', $purchaseRequest->id, [
+                'pr_number' => $purchaseRequest->pr_number,
+                'rejected_by' => $user->id,
+                'reason' => $validated['comments'],
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('purchase-requests.show', $purchaseRequest)
+                ->with('success', 'PR rejected. The PR creator will be notified.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => 'Failed to reject PR: ' . $e->getMessage()]);
+        }
     }
 }
 
