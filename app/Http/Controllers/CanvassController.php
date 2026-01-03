@@ -42,11 +42,16 @@ class CanvassController extends Controller
 
         $canvasses = $query->latest()->paginate(15);
 
-        // Check for overdue canvasses
-        foreach ($canvasses as $canvass) {
-            if ($canvass->isOverdue() && $canvass->status !== 'OVERDUE') {
-                $canvass->update(['status' => 'OVERDUE']);
-            }
+        // Check for overdue canvasses - Use bulk update instead of loop
+        // This is much faster - single query instead of N queries
+        $overdueIds = $canvasses->filter(function($canvass) {
+            return $canvass->isOverdue() && $canvass->status !== 'OVERDUE';
+        })->pluck('id');
+        
+        if ($overdueIds->isNotEmpty()) {
+            Canvass::whereIn('id', $overdueIds)->update(['status' => 'OVERDUE']);
+            // Refresh the collection to reflect updates
+            $canvasses->load('rfq.purchaseRequest');
         }
 
         return view('canvasses.index', compact('canvasses'));

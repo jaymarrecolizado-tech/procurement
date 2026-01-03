@@ -1,12 +1,14 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Dashboard') }}
-        </h2>
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">Dashboard</h2>
+                <p class="mt-1 text-sm text-gray-500">Welcome back, {{ Auth::user()->name }}</p>
+            </div>
+        </div>
     </x-slot>
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+    <div>
             @if(session('success'))
                 <x-flash-message type="success" :message="session('success')" />
             @endif
@@ -156,127 +158,116 @@
                 @endforeach
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Workflow Visualization -->
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Procurement Workflow</h3>
-                        <div class="space-y-4">
-                            @foreach($workflowSteps as $step)
-                                <div class="flex items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="w-8 h-8 bg-{{ $step['color'] }}-500 rounded-full flex items-center justify-center">
-                                            <span class="text-white text-sm font-medium">{{ $step['step'] }}</span>
-                                        </div>
-                                    </div>
-                                    <div class="ml-4">
-                                        <p class="text-sm font-medium text-gray-900">{{ $step['name'] }}</p>
-                                        <p class="text-sm text-gray-500">{{ $step['description'] }}</p>
-                                    </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+            <!-- Workflow Visualization -->
+            <x-card>
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Procurement Workflow</h3>
+                <div class="space-y-3">
+                    @foreach($workflowSteps as $step)
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0">
+                                <div class="w-8 h-8 bg-{{ $step['color'] }}-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-white text-xs font-bold">{{ $step['step'] }}</span>
                                 </div>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Pending Tasks -->
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Pending Tasks</h3>
-                        @if($pendingTasks->count() > 0)
-                            <div class="space-y-3">
-                                @foreach($pendingTasks as $task)
-                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                        <div>
-                                            @if(isset($task->rfq))
-                                                <p class="text-sm font-medium text-gray-900">
-                                                    Canvass Task - PR: {{ $task->rfq->purchaseRequest->pr_number }}
-                                                </p>
-                                                <p class="text-sm text-gray-500">
-                                                    {{ $task->rfq->purchaseRequest->project_title }}
-                                                </p>
-                                            @else
-                                                <p class="text-sm font-medium text-gray-900">
-                                                    PR: {{ $task->pr_number ?? $task->id }}
-                                                </p>
-                                                <p class="text-sm text-gray-500">
-                                                    {{ $task->project_title ?? 'Purchase Request' }}
-                                                </p>
-                                            @endif
-                                        </div>
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                            @if($task->status ?? 'PENDING' == 'PENDING') bg-yellow-100 text-yellow-800
-                                            @elseif($task->status ?? 'PENDING' == 'IN_PROGRESS') bg-blue-100 text-blue-800
-                                            @else bg-gray-100 text-gray-800 @endif">
-                                            {{ ucfirst($task->status ?? 'Pending') }}
-                                        </span>
-                                    </div>
-                                @endforeach
                             </div>
-                        @else
-                            <p class="text-sm text-gray-500">No pending tasks at the moment.</p>
-                        @endif
-                    </div>
+                            <div class="ml-3 flex-1">
+                                <p class="text-sm font-medium text-gray-900">{{ $step['name'] }}</p>
+                                <p class="text-xs text-gray-500 mt-0.5">{{ $step['description'] }}</p>
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
-            </div>
+            </x-card>
 
-            <!-- Recent Purchase Requests -->
-            <div class="mt-6 bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-medium text-gray-900">Recent Purchase Requests</h3>
-                        @if(Auth::user()->hasAnyRole(['END_USER', 'PROCUREMENT_OFFICER', 'ADMIN']))
-                            <a href="#" class="text-sm text-indigo-600 hover:text-indigo-500">
-                                View All
-                            </a>
-                        @endif
+            <!-- Pending Tasks -->
+            <x-card>
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Pending Tasks</h3>
+                @if($pendingTasks->count() > 0)
+                    <div class="space-y-2">
+                        @foreach($pendingTasks as $task)
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
+                                <div class="flex-1 min-w-0">
+                                    @if(isset($task->rfq))
+                                        <p class="text-sm font-medium text-gray-900 truncate">
+                                            Canvass Task - PR: {{ $task->rfq->purchaseRequest->pr_number }}
+                                        </p>
+                                        <p class="text-xs text-gray-500 truncate">
+                                            {{ $task->rfq->purchaseRequest->project_title }}
+                                        </p>
+                                    @else
+                                        <p class="text-sm font-medium text-gray-900 truncate">
+                                            PR: {{ $task->pr_number ?? $task->id }}
+                                        </p>
+                                        <p class="text-xs text-gray-500 truncate">
+                                            {{ $task->project_title ?? 'Purchase Request' }}
+                                        </p>
+                                    @endif
+                                </div>
+                                <span class="badge 
+                                    @if(($task->status ?? 'PENDING') == 'PENDING') badge-warning
+                                    @elseif(($task->status ?? 'PENDING') == 'IN_PROGRESS') badge-info
+                                    @else badge-gray @endif ml-2">
+                                    {{ ucfirst($task->status ?? 'Pending') }}
+                                </span>
+                            </div>
+                        @endforeach
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PR Number</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project Title</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End User</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                @foreach($recentPRs as $pr)
-                                    <tr class="hover:bg-gray-50 transition-colors duration-150">
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            <a href="{{ route('purchase-requests.show', $pr) }}" class="text-indigo-600 hover:text-indigo-900">
-                                                {{ $pr->pr_number }}
-                                            </a>
-                                        </td>
-                                        <td class="px-6 py-4 text-sm text-gray-900">
-                                            <a href="{{ route('purchase-requests.show', $pr) }}" class="hover:text-indigo-600 transition">
-                                                {{ Str::limit($pr->project_title, 50) }}
-                                            </a>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {{ $pr->endUser->name }}
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                                @if($pr->status == 'PR_UNDER_REVIEW') bg-yellow-100 text-yellow-800
-                                                @elseif($pr->status == 'RFQ_READY') bg-blue-100 text-blue-800
-                                                @elseif($pr->status == 'COA_STAMPED') bg-green-100 text-green-800
-                                                @else bg-gray-100 text-gray-800 @endif">
-                                                {{ $pr->status_name }}
-                                            </span>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {{ $pr->created_at->format('M d, Y') }}
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+                @else
+                    <p class="text-sm text-gray-500 text-center py-4">No pending tasks at the moment.</p>
+                @endif
+            </x-card>
         </div>
+
+        <!-- Recent Purchase Requests -->
+        <x-card>
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Recent Purchase Requests</h3>
+                @if(Auth::user()->hasAnyRole(['END_USER', 'PROCUREMENT_OFFICER', 'ADMIN']))
+                    <a href="{{ route('purchase-requests.index') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+                        View All →
+                    </a>
+                @endif
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>PR Number</th>
+                            <th>Project Title</th>
+                            <th>End User</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($recentPRs as $pr)
+                            <tr>
+                                <td class="font-medium">
+                                    <a href="{{ route('purchase-requests.show', $pr) }}" class="text-indigo-600 hover:text-indigo-700">
+                                        {{ $pr->pr_number }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="{{ route('purchase-requests.show', $pr) }}" class="text-gray-900 hover:text-indigo-600">
+                                        {{ Str::limit($pr->project_title, 40) }}
+                                    </a>
+                                </td>
+                                <td class="text-gray-500">{{ $pr->endUser->name }}</td>
+                                <td>
+                                    <span class="badge 
+                                        @if($pr->status == 'PR_UNDER_REVIEW') badge-warning
+                                        @elseif($pr->status == 'RFQ_READY') badge-info
+                                        @elseif($pr->status == 'COA_STAMPED') badge-success
+                                        @else badge-gray @endif">
+                                        {{ $pr->status_name }}
+                                    </span>
+                                </td>
+                                <td class="text-gray-500">{{ $pr->created_at->format('M d, Y') }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </x-card>
     </div>
 </x-app-layout>

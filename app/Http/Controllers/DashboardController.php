@@ -38,69 +38,109 @@ class DashboardController extends Controller
     
     private function getStatistics($user)
     {
-        switch ($user->role) {
-            case 'END_USER':
-                return [
-                    'total_prs' => PurchaseRequest::where('end_user_id', $user->id)->count(),
-                    'pending_review' => PurchaseRequest::where('end_user_id', $user->id)
-                        ->where('status', 'PR_UNDER_REVIEW')->count(),
-                    'in_progress' => PurchaseRequest::where('end_user_id', $user->id)
-                        ->whereIn('status', ['RFQ_READY', 'RFQ_DISSEMINATED', 'CANVASS_COMPLETE', 'BAC_DOCS_READY', 'BAC_APPROVED', 'PO_APPROVED'])
-                        ->count(),
-                    'completed' => PurchaseRequest::where('end_user_id', $user->id)
-                        ->whereIn('status', ['PO_COMPLETE', 'COA_STAMPED'])->count(),
-                ];
-                
-            case 'PROCUREMENT_OFFICER':
-                return [
-                    'total_prs' => PurchaseRequest::count(),
-                    'pending_review' => PurchaseRequest::where('status', 'PR_UNDER_REVIEW')->count(),
-                    'active_rfqs' => class_exists('App\Models\RFQ') ? \App\Models\RFQ::where('status', 'ACTIVE')->count() : 0,
-                    'completed' => class_exists('App\Models\PurchaseOrder') ? \App\Models\PurchaseOrder::where('status', 'COMPLETE')->count() : 0,
-                ];
-                
-            case 'CANVASSER':
-                if (class_exists('App\Models\Canvass')) {
+        // Cache statistics for 5 minutes to improve performance
+        $cacheKey = 'dashboard_stats_' . $user->id . '_' . $user->role;
+        
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 300, function() use ($user) {
+            switch ($user->role) {
+                case 'END_USER':
+                    // Optimize: Use single query with conditional aggregation
+                    $prStats = PurchaseRequest::where('end_user_id', $user->id)
+                        ->selectRaw('
+                            COUNT(*) as total_prs,
+                            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as pending_review,
+                            SUM(CASE WHEN status IN (?, ?, ?, ?, ?, ?) THEN 1 ELSE 0 END) as in_progress,
+                            SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as completed
+                        ', [
+                            'PR_UNDER_REVIEW',
+                            'RFQ_READY', 'RFQ_DISSEMINATED', 'CANVASS_COMPLETE', 'BAC_DOCS_READY', 'BAC_APPROVED', 'PO_APPROVED',
+                            'PO_COMPLETE', 'COA_STAMPED'
+                        ])
+                        ->first();
+                    
                     return [
-                        'total_tasks' => \App\Models\Canvass::where('canvasser_id', $user->id)->count(),
-                        'pending_tasks' => \App\Models\Canvass::where('canvasser_id', $user->id)
-                            ->where('status', 'PENDING')->count(),
-                        'in_progress' => \App\Models\Canvass::where('canvasser_id', $user->id)
-                            ->where('status', 'IN_PROGRESS')->count(),
-                        'completed' => \App\Models\Canvass::where('canvasser_id', $user->id)
-                            ->where('status', 'COMPLETED')->count(),
+                        'total_prs' => $prStats->total_prs ?? 0,
+                        'pending_review' => $prStats->pending_review ?? 0,
+                        'in_progress' => $prStats->in_progress ?? 0,
+                        'completed' => $prStats->completed ?? 0,
                     ];
-                }
-                return [
-                    'total_tasks' => 0,
-                    'pending_tasks' => 0,
-                    'in_progress' => 0,
-                    'completed' => 0,
-                ];
-                
-            case 'BAC_SECRETARIAT':
-            case 'BAC_CHAIR':
-            case 'BAC_MEMBER':
-                $pendingApprovals = ApprovalRouting::where('approver_id', $user->id)
-                    ->where('status', 'PENDING')
-                    ->count();
-                return [
-                    'total_prs' => PurchaseRequest::where('status', 'BAC_DOCS_READY')->count(),
-                    'pending_approval' => $pendingApprovals,
-                    'approved' => PurchaseRequest::where('status', 'BAC_APPROVED')->count(),
-                    'rejected' => ApprovalRouting::where('approver_id', $user->id)
-                        ->where('status', 'REJECTED')
-                        ->count(),
-                ];
-                
-            default:
-                return [
-                    'total_prs' => PurchaseRequest::count(),
-                    'pending_review' => PurchaseRequest::where('status', 'PR_UNDER_REVIEW')->count(),
-                    'in_progress' => PurchaseRequest::whereIn('status', ['RFQ_READY', 'RFQ_DISSEMINATED'])->count(),
-                    'completed' => PurchaseRequest::where('status', 'COA_STAMPED')->count(),
-                ];
-        }
+                    
+                case 'PROCUREMENT_OFFICER':
+                    // Optimize: Combine queries where possible
+                    $prCounts = PurchaseRequest::selectRaw('
+                        COUNT(*) as total_prs,
+                        SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as pending_review
+                    ', ['PR_UNDER_REVIEW'])->first();
+                    
+                    return [
+                        'total_prs' => $prCounts->total_prs ?? 0,
+                        'pending_review' => $prCounts->pending_review ?? 0,
+                        'active_rfqs' => class_exists('App\Models\RFQ') ? \App\Models\RFQ::where('status', 'ACTIVE')->count() : 0,
+                        'completed' => class_exists('App\Models\PurchaseOrder') ? \App\Models\PurchaseOrder::where('status', 'COMPLETE')->count() : 0,
+                    ];
+                    
+                case 'CANVASSER':
+                    if (class_exists('App\Models\Canvass')) {
+                        // Optimize: Single query with conditional aggregation
+                        $canvassStats = \App\Models\Canvass::where('canvasser_id', $user->id)
+                            ->selectRaw('
+                                COUNT(*) as total_tasks,
+                                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as pending_tasks,
+                                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as in_progress,
+                                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
+                            ', ['PENDING', 'IN_PROGRESS', 'COMPLETED'])
+                            ->first();
+                        
+                        return [
+                            'total_tasks' => $canvassStats->total_tasks ?? 0,
+                            'pending_tasks' => $canvassStats->pending_tasks ?? 0,
+                            'in_progress' => $canvassStats->in_progress ?? 0,
+                            'completed' => $canvassStats->completed ?? 0,
+                        ];
+                    }
+                    return [
+                        'total_tasks' => 0,
+                        'pending_tasks' => 0,
+                        'in_progress' => 0,
+                        'completed' => 0,
+                    ];
+                    
+                case 'BAC_SECRETARIAT':
+                case 'BAC_CHAIR':
+                case 'BAC_MEMBER':
+                    // Optimize: Combine approval routing queries
+                    $approvalStats = ApprovalRouting::where('approver_id', $user->id)
+                        ->selectRaw('
+                            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as pending_approval,
+                            SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as rejected
+                        ', ['PENDING', 'REJECTED'])
+                        ->first();
+                    
+                    return [
+                        'total_prs' => PurchaseRequest::where('status', 'BAC_DOCS_READY')->count(),
+                        'pending_approval' => $approvalStats->pending_approval ?? 0,
+                        'approved' => PurchaseRequest::where('status', 'BAC_APPROVED')->count(),
+                        'rejected' => $approvalStats->rejected ?? 0,
+                    ];
+                    
+                default:
+                    // Optimize: Single query with conditional aggregation
+                    $prStats = PurchaseRequest::selectRaw('
+                        COUNT(*) as total_prs,
+                        SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as pending_review,
+                        SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as in_progress,
+                        SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed
+                    ', ['PR_UNDER_REVIEW', 'RFQ_READY', 'RFQ_DISSEMINATED', 'COA_STAMPED'])
+                        ->first();
+                    
+                    return [
+                        'total_prs' => $prStats->total_prs ?? 0,
+                        'pending_review' => $prStats->pending_review ?? 0,
+                        'in_progress' => $prStats->in_progress ?? 0,
+                        'completed' => $prStats->completed ?? 0,
+                    ];
+            }
+        });
     }
     
     private function getPendingTasks($user)

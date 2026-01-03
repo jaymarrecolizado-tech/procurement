@@ -45,11 +45,12 @@ class RFQController extends Controller
 
         $rfqs = $query->latest()->paginate(15);
 
-        // Also get PRs ready for RFQ creation
+        // Also get PRs ready for RFQ creation (limit to 20 for performance)
         $prsReadyForRfq = PurchaseRequest::with('endUser')
             ->where('status', 'RFQ_READY')
             ->whereDoesntHave('rfq')
             ->latest()
+            ->limit(20)
             ->get();
 
         return view('rfqs.index', compact('rfqs', 'prsReadyForRfq'));

@@ -138,17 +138,20 @@ class ApprovalDashboardController extends Controller
             ->limit(20)
             ->get();
 
-        // Get statistics
+        // Get statistics (optimized: single query instead of multiple)
+        $approvalStats = ApprovalRouting::where('approver_id', $user->id)
+            ->selectRaw('
+                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as total_approved,
+                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as total_rejected
+            ', ['APPROVED', 'REJECTED'])
+            ->first();
+        
         $stats = [
             'total_pending' => $allPendingApprovals->count(),
             'can_approve_now' => $allPendingApprovals->where('can_approve', true)->count(),
             'waiting_for_others' => $allPendingApprovals->where('can_approve', false)->count(),
-            'total_approved' => ApprovalRouting::where('approver_id', $user->id)
-                ->where('status', 'APPROVED')
-                ->count(),
-            'total_rejected' => ApprovalRouting::where('approver_id', $user->id)
-                ->where('status', 'REJECTED')
-                ->count(),
+            'total_approved' => $approvalStats->total_approved ?? 0,
+            'total_rejected' => $approvalStats->total_rejected ?? 0,
         ];
 
         return view('approvals.dashboard', compact('allPendingApprovals', 'approvalHistory', 'stats', 'documentType'));

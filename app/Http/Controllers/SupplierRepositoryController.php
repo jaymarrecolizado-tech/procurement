@@ -20,12 +20,97 @@ class SupplierRepositoryController extends Controller
      */
     public function index(Request $request)
     {
-        $query = SupplierQuotationHistory::with(['supplier', 'enteredBy', 'images']);
+        // Determine which tab is active (suppliers or quotations)
+        $activeTab = $request->get('tab', 'quotations'); // 'suppliers' or 'quotations'
 
-        // Wildcard search
+        // Suppliers Query
+        $suppliersQuery = Supplier::query();
+
+        // Enhanced Supplier search - supports multi-word, multiple fields, and related data
+        if ($request->has('supplier_search') && $request->supplier_search) {
+            $search = trim($request->supplier_search);
+            
+            // Split search into individual terms for more flexible matching
+            $searchTerms = preg_split('/\s+/', $search);
+            $searchTerms = array_filter($searchTerms); // Remove empty strings
+            
+            $suppliersQuery->where(function($q) use ($search, $searchTerms) {
+                // Exact match on full search string (highest priority)
+                $q->where(function($subQ) use ($search) {
+                    $subQ->where('supplier_name', 'LIKE', "%{$search}%")
+                         ->orWhere('supplier_name_original', 'LIKE', "%{$search}%")
+                         ->orWhere('supplier_email', 'LIKE', "%{$search}%")
+                         ->orWhere('supplier_contact', 'LIKE', "%{$search}%")
+                         ->orWhere('supplier_address', 'LIKE', "%{$search}%")
+                         ->orWhere('business_registration_number', 'LIKE', "%{$search}%")
+                         ->orWhere('notes', 'LIKE', "%{$search}%");
+                });
+                
+                // Multi-word search: each term must match somewhere
+                if (count($searchTerms) > 1) {
+                    foreach ($searchTerms as $term) {
+                        $term = trim($term);
+                        if (!empty($term)) {
+                            $q->orWhere(function($termQ) use ($term) {
+                                $termQ->where('supplier_name', 'LIKE', "%{$term}%")
+                                      ->orWhere('supplier_name_original', 'LIKE', "%{$term}%")
+                                      ->orWhere('supplier_email', 'LIKE', "%{$term}%")
+                                      ->orWhere('supplier_contact', 'LIKE', "%{$term}%")
+                                      ->orWhere('supplier_address', 'LIKE', "%{$term}%")
+                                      ->orWhere('business_registration_number', 'LIKE', "%{$term}%")
+                                      ->orWhere('supplier_category', 'LIKE', "%{$term}%")
+                                      ->orWhere('notes', 'LIKE', "%{$term}%");
+                            });
+                        }
+                    }
+                }
+                
+                // Search in quotation history (items they've quoted)
+                $q->orWhereHas('quotationHistory', function($historyQ) use ($search, $searchTerms) {
+                    $historyQ->where(function($itemQ) use ($search, $searchTerms) {
+                        // Full search string match
+                        $itemQ->where('item_name', 'LIKE', "%{$search}%")
+                              ->orWhere('item_code', 'LIKE', "%{$search}%")
+                              ->orWhere('item_description', 'LIKE', "%{$search}%")
+                              ->orWhere('rfq_number', 'LIKE', "%{$search}%");
+                        
+                        // Multi-word search in items
+                        if (count($searchTerms) > 1) {
+                            foreach ($searchTerms as $term) {
+                                $term = trim($term);
+                                if (!empty($term)) {
+                                    $itemQ->orWhere(function($termItemQ) use ($term) {
+                                        $termItemQ->where('item_name', 'LIKE', "%{$term}%")
+                                                  ->orWhere('item_code', 'LIKE', "%{$term}%")
+                                                  ->orWhere('item_description', 'LIKE', "%{$term}%");
+                                    });
+                                }
+                            }
+                        }
+                    });
+                });
+            });
+        }
+
+        // Filter suppliers by category
+        if ($request->has('supplier_category') && $request->supplier_category) {
+            $suppliersQuery->where('supplier_category', $request->supplier_category);
+        }
+
+        // Filter suppliers by status
+        if ($request->has('supplier_status') && $request->supplier_status) {
+            $suppliersQuery->where('status', $request->supplier_status);
+        }
+
+        $suppliers = $suppliersQuery->withCount('quotationHistory')->orderBy('supplier_name')->paginate(10, ['*'], 'suppliers_page');
+
+        // Quotations Query
+        $quotationsQuery = SupplierQuotationHistory::with(['supplier', 'enteredBy', 'images']);
+
+        // Wildcard search for quotations
         if ($request->has('search') && $request->search) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $quotationsQuery->where(function($q) use ($search) {
                 $q->where('item_name', 'LIKE', "%{$search}%")
                   ->orWhere('item_code', 'LIKE', "%{$search}%")
                   ->orWhere('item_description', 'LIKE', "%{$search}%")
@@ -39,29 +124,35 @@ class SupplierRepositoryController extends Controller
 
         // Filter by supplier
         if ($request->has('supplier_id') && $request->supplier_id) {
-            $query->where('supplier_id', $request->supplier_id);
+            $quotationsQuery->where('supplier_id', $request->supplier_id);
         }
 
         // Filter by date range
         if ($request->has('start_date') && $request->start_date) {
-            $query->where('quotation_date', '>=', $request->start_date);
+            $quotationsQuery->where('quotation_date', '>=', $request->start_date);
         }
         if ($request->has('end_date') && $request->end_date) {
-            $query->where('quotation_date', '<=', $request->end_date);
+            $quotationsQuery->where('quotation_date', '<=', $request->end_date);
         }
 
         // Filter by category
         if ($request->has('category') && $request->category) {
-            $query->whereHas('supplier', function($q) use ($request) {
+            $quotationsQuery->whereHas('supplier', function($q) use ($request) {
                 $q->where('supplier_category', $request->category);
             });
         }
 
-        $quotations = $query->latest('quotation_date')->paginate(20);
-        $suppliers = Supplier::where('status', 'ACTIVE')->orderBy('supplier_name')->get();
+        // Get pagination size from request, default to 10
+        $perPage = $request->get('per_page', 10);
+        $perPage = in_array($perPage, [10, 20, 30, 50, 100]) ? $perPage : 10; // Validate allowed values
+        
+        $quotations = $quotationsQuery->latest('quotation_date')->paginate($perPage, ['*'], 'quotations_page')->appends($request->except('quotations_page'));
+
+        // Get filter options
+        $allSuppliers = Supplier::where('status', 'ACTIVE')->orderBy('supplier_name')->get();
         $categories = Supplier::distinct()->whereNotNull('supplier_category')->pluck('supplier_category');
 
-        return view('supplier-repository.index', compact('quotations', 'suppliers', 'categories'));
+        return view('supplier-repository.index', compact('quotations', 'suppliers', 'allSuppliers', 'categories', 'activeTab'));
     }
 
     /**
@@ -401,20 +492,45 @@ class SupplierRepositoryController extends Controller
     }
 
     /**
-     * Get suppliers for autocomplete
+     * Enhanced get suppliers for autocomplete
      */
     public function getSuppliers(Request $request)
     {
-        $search = $request->get('search', '');
+        $search = trim($request->get('search', ''));
+        
+        if (strlen($search) < 2) {
+            return response()->json([]);
+        }
         
         $suppliers = Supplier::where('status', 'ACTIVE')
             ->where(function($q) use ($search) {
                 $q->where('supplier_name', 'LIKE', "%{$search}%")
-                  ->orWhere('supplier_name_original', 'LIKE', "%{$search}%");
+                  ->orWhere('supplier_name_original', 'LIKE', "%{$search}%")
+                  ->orWhere('supplier_email', 'LIKE', "%{$search}%")
+                  ->orWhere('supplier_contact', 'LIKE', "%{$search}%")
+                  ->orWhere('supplier_category', 'LIKE', "%{$search}%");
             })
+            ->withCount('quotationHistory')
+            ->orderBy('quotation_history_count', 'desc')
+            ->orderBy('supplier_name')
             ->limit(20)
-            ->get(['id', 'supplier_name_original as name']);
+            ->get(['id', 'supplier_name_original', 'supplier_category', 'supplier_email', 'supplier_contact']);
 
-        return response()->json($suppliers);
+        // Format response with additional context
+        $results = $suppliers->map(function($supplier) {
+            return [
+                'id' => $supplier->id,
+                'name' => $supplier->supplier_name_original,
+                'category' => $supplier->supplier_category,
+                'email' => $supplier->supplier_email,
+                'contact' => $supplier->supplier_contact,
+                'quotations_count' => $supplier->quotation_history_count,
+                'display' => $supplier->supplier_name_original . 
+                            ($supplier->supplier_category ? ' (' . $supplier->supplier_category . ')' : '') .
+                            ($supplier->quotation_history_count > 0 ? ' - ' . $supplier->quotation_history_count . ' quotations' : ''),
+            ];
+        });
+
+        return response()->json($results);
     }
 }
