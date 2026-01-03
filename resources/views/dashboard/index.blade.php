@@ -7,14 +7,32 @@
 
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            @if(session('success'))
+                <x-flash-message type="success" :message="session('success')" />
+            @endif
+
+            @if(session('error'))
+                <x-flash-message type="error" :message="session('error')" />
+            @endif
+
             <!-- Welcome Message -->
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
-                <div class="p-6 text-gray-900">
-                    <h3 class="text-lg font-medium mb-2">Welcome, {{ Auth::user()->name }}!</h3>
-                    <p class="text-gray-600">
-                        Role: <span class="font-medium">{{ Auth::user()->role_name }}</span>
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 overflow-hidden shadow-lg sm:rounded-lg mb-6">
+                <div class="p-6 text-white">
+                    <h3 class="text-xl font-semibold mb-2">Welcome back, {{ Auth::user()->name }}!</h3>
+                    <p class="text-indigo-100">
+                        <span class="inline-flex items-center">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                            Role: <span class="font-medium ml-1">{{ Auth::user()->role_name }}</span>
+                        </span>
                         @if(Auth::user()->department)
-                            | Department: <span class="font-medium">{{ Auth::user()->department }}</span>
+                            <span class="ml-4 inline-flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                                </svg>
+                                Department: <span class="font-medium ml-1">{{ Auth::user()->department }}</span>
+                            </span>
                         @endif
                     </p>
                 </div>
@@ -23,49 +41,49 @@
             <!-- Statistics Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 @foreach($stats as $key => $value)
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg hover:shadow-md transition-shadow duration-200">
                         <div class="p-6">
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
                                     @switch($key)
                                         @case('total_prs')
-                                            <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <div class="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center shadow-sm">
+                                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                                 </svg>
                                             </div>
                                             @break
                                         @case('pending_review')
-                                            <div class="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <div class="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center shadow-sm">
+                                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                 </svg>
                                             </div>
                                             @break
                                         @case('in_progress')
-                                            <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
-                                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <div class="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center shadow-sm">
+                                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                                 </svg>
                                             </div>
                                             @break
                                         @case('completed')
-                                            <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center shadow-sm">
+                                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                 </svg>
                                             </div>
                                             @break
                                         @default
-                                            <div class="w-8 h-8 bg-gray-500 rounded-full flex items-center justify-center">
-                                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <div class="w-12 h-12 bg-gray-500 rounded-lg flex items-center justify-center shadow-sm">
+                                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                                                 </svg>
                                             </div>
                                     @endswitch
                                 </div>
-                                <div class="ml-4">
-                                    <p class="text-sm font-medium text-gray-500">
+                                <div class="ml-4 flex-1">
+                                    <p class="text-sm font-medium text-gray-500 uppercase tracking-wide">
                                         @switch($key)
                                             @case('total_prs')
                                                 Total PRs
@@ -98,7 +116,7 @@
                                                 {{ ucfirst(str_replace('_', ' ', $key)) }}
                                         @endswitch
                                     </p>
-                                    <p class="text-2xl font-semibold text-gray-900">{{ $value }}</p>
+                                    <p class="text-3xl font-bold text-gray-900 mt-1">{{ $value }}</p>
                                 </div>
                             </div>
                         </div>
@@ -194,12 +212,16 @@
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
                                 @foreach($recentPRs as $pr)
-                                    <tr>
+                                    <tr class="hover:bg-gray-50 transition-colors duration-150">
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {{ $pr->pr_number }}
+                                            <a href="{{ route('purchase-requests.show', $pr) }}" class="text-indigo-600 hover:text-indigo-900">
+                                                {{ $pr->pr_number }}
+                                            </a>
                                         </td>
                                         <td class="px-6 py-4 text-sm text-gray-900">
-                                            {{ Str::limit($pr->project_title, 50) }}
+                                            <a href="{{ route('purchase-requests.show', $pr) }}" class="hover:text-indigo-600 transition">
+                                                {{ Str::limit($pr->project_title, 50) }}
+                                            </a>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {{ $pr->endUser->name }}

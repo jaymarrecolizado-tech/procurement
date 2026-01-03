@@ -104,6 +104,38 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+            
+            @auth
+                @if(Auth::user()->hasAnyRole(['END_USER', 'PROCUREMENT_OFFICER', 'ADMIN']))
+                    <x-responsive-nav-link :href="route('purchase-requests.index')" :active="request()->routeIs('purchase-requests.*')">
+                        {{ __('Purchase Requests') }}
+                    </x-responsive-nav-link>
+                @endif
+                
+                @if(Auth::user()->hasAnyRole(['PROCUREMENT_OFFICER', 'ADMIN']))
+                    <x-responsive-nav-link :href="route('rfqs.index')" :active="request()->routeIs('rfqs.*')">
+                        {{ __('RFQ & Canvass') }}
+                    </x-responsive-nav-link>
+                @endif
+                
+                @if(Auth::user()->hasAnyRole(['BAC_SECRETARIAT', 'BAC_CHAIR', 'BAC_MEMBER', 'ADMIN']))
+                    <x-responsive-nav-link :href="route('bac-documents.index')" :active="request()->routeIs('bac-documents.*')">
+                        {{ __('BAC Documents') }}
+                    </x-responsive-nav-link>
+                @endif
+                
+                @if(Auth::user()->hasAnyRole(['PROCUREMENT_OFFICER', 'BAC_CHAIR', 'ADMIN']))
+                    <x-responsive-nav-link :href="route('purchase-orders.index')" :active="request()->routeIs('purchase-orders.*')">
+                        {{ __('Purchase Orders') }}
+                    </x-responsive-nav-link>
+                @endif
+                
+                @if(Auth::user()->hasAnyRole(['CANVASSER']))
+                    <x-responsive-nav-link :href="route('canvasses.index')" :active="request()->routeIs('canvasses.*')">
+                        {{ __('My Canvass Tasks') }}
+                    </x-responsive-nav-link>
+                @endif
+            @endauth
         </div>
 
         <!-- Responsive Settings Options -->
@@ -111,7 +143,7 @@
             <div class="px-4">
                 <div class="font-medium text-base text-gray-800">{{ Auth::user()->name }}</div>
                 <div class="font-medium text-sm text-gray-500">{{ Auth::user()->email }}</div>
-                <div class="text-xs text-gray-500">{{ Auth::user()->role_name }}</div>
+                <div class="text-xs text-gray-500">{{ Auth::user()->role_name }} - {{ Auth::user()->department ?? 'N/A' }}</div>
             </div>
 
             <div class="mt-3 space-y-1">

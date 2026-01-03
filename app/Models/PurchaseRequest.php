@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class PurchaseRequest extends Model
 {
@@ -28,6 +29,16 @@ class PurchaseRequest extends Model
         'has_quantity',
         'has_market_survey',
         'deficiency_notes',
+        'purpose',
+        'requested_by_name',
+        'requested_by_designation',
+        'approved_by_name',
+        'approved_by_designation',
+        'budget_officer_name',
+        'budget_officer_designation',
+        'office_address',
+        'office_name',
+        'responsibility_center',
     ];
 
     protected $casts = [

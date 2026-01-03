@@ -5,9 +5,6 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\PurchaseRequest;
-use App\Models\RFQ;
-use App\Models\Canvass;
-use App\Models\PurchaseOrder;
 
 class DashboardController extends Controller
 {
@@ -57,19 +54,27 @@ class DashboardController extends Controller
                 return [
                     'total_prs' => PurchaseRequest::count(),
                     'pending_review' => PurchaseRequest::where('status', 'PR_UNDER_REVIEW')->count(),
-                    'active_rfqs' => RFQ::where('status', 'ACTIVE')->count(),
-                    'completed' => PurchaseOrder::where('status', 'COMPLETE')->count(),
+                    'active_rfqs' => class_exists('App\Models\RFQ') ? \App\Models\RFQ::where('status', 'ACTIVE')->count() : 0,
+                    'completed' => class_exists('App\Models\PurchaseOrder') ? \App\Models\PurchaseOrder::where('status', 'COMPLETE')->count() : 0,
                 ];
                 
             case 'CANVASSER':
+                if (class_exists('App\Models\Canvass')) {
+                    return [
+                        'total_tasks' => \App\Models\Canvass::where('canvasser_id', $user->id)->count(),
+                        'pending_tasks' => \App\Models\Canvass::where('canvasser_id', $user->id)
+                            ->where('status', 'PENDING')->count(),
+                        'in_progress' => \App\Models\Canvass::where('canvasser_id', $user->id)
+                            ->where('status', 'IN_PROGRESS')->count(),
+                        'completed' => \App\Models\Canvass::where('canvasser_id', $user->id)
+                            ->where('status', 'COMPLETED')->count(),
+                    ];
+                }
                 return [
-                    'total_tasks' => Canvass::where('canvasser_id', $user->id)->count(),
-                    'pending_tasks' => Canvass::where('canvasser_id', $user->id)
-                        ->where('status', 'PENDING')->count(),
-                    'in_progress' => Canvass::where('canvasser_id', $user->id)
-                        ->where('status', 'IN_PROGRESS')->count(),
-                    'completed' => Canvass::where('canvasser_id', $user->id)
-                        ->where('status', 'COMPLETED')->count(),
+                    'total_tasks' => 0,
+                    'pending_tasks' => 0,
+                    'in_progress' => 0,
+                    'completed' => 0,
                 ];
                 
             case 'BAC_SECRETARIAT':
@@ -96,11 +101,14 @@ class DashboardController extends Controller
     {
         switch ($user->role) {
             case 'CANVASSER':
-                return Canvass::where('canvasser_id', $user->id)
-                    ->whereIn('status', ['PENDING', 'IN_PROGRESS'])
-                    ->with('rfq.purchaseRequest')
-                    ->limit(5)
-                    ->get();
+                if (class_exists('App\Models\Canvass')) {
+                    return \App\Models\Canvass::where('canvasser_id', $user->id)
+                        ->whereIn('status', ['PENDING', 'IN_PROGRESS'])
+                        ->with('rfq.purchaseRequest')
+                        ->limit(5)
+                        ->get();
+                }
+                return collect();
                 
             case 'BAC_CHAIR':
             case 'BAC_MEMBER':

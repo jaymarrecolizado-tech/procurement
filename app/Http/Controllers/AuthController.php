@@ -59,15 +59,16 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => ['required', 'confirmed', Password::defaults()],
-            'role' => 'required|in:END_USER,PROCUREMENT_OFFICER,BAC_SECRETARIAT,BAC_CHAIR,BAC_MEMBER,CANVASSER,SUPPLIER,ADMIN',
             'department' => 'nullable|string|max:255',
         ]);
 
+        // SECURITY FIX: Only allow END_USER role during registration
+        // Other roles must be assigned by administrators
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role' => $request->role,
+            'role' => 'END_USER', // Fixed: Default role only, prevents privilege escalation
             'department' => $request->department,
         ]);
 
